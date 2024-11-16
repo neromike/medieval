@@ -5,15 +5,47 @@ import sys
 pygame.init()
 
 # Screen settings
-screen_width, screen_height = 3309, 1886
-screen = pygame.display.set_mode((screen_width, screen_height))
+screen_info = pygame.display.Info()  # Get screen resolution
+screen_width, screen_height = screen_info.current_w, screen_info.current_h
+screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
 pygame.display.set_caption("Medieval")
 
-# Load the background image
-background_image = pygame.image.load("map.jpg")
+# Load the background image (original size)
+background_image_original = pygame.image.load("map.jpg")
+original_width, original_height = background_image_original.get_size()
+
+# Scale the background image to full screen
+background_image = pygame.transform.scale(background_image_original, (screen_width, screen_height))
 
 # Grid settings
 grid_size = 100  # Size of each grid cell in pixels
+
+# Define allowed movement positions based on the original image's coordinates
+allowed_positions_original = [
+    pygame.Vector2(1300, 2500), # Farm
+    pygame.Vector2(1100, 5000), # Miller
+    pygame.Vector2(4100, 630),  # Tavern
+    pygame.Vector2(5300, 630),  # Bakery
+    pygame.Vector2(6600, 630),  # Brewery
+    pygame.Vector2(7900, 630),  # Butcher
+    pygame.Vector2(4300, 2600),  # Herbalist
+    pygame.Vector2(4200, 4800),  # Cartwright
+    pygame.Vector2(5000, 5800),  # Carpenter
+    pygame.Vector2(6400, 5800),  # Blacksmith
+    pygame.Vector2(7600, 5800),  # Elder
+    pygame.Vector2(9700, 5900),  # Manor
+    pygame.Vector2(9500, 4300),  # Church
+    pygame.Vector2(9300, 1800),  # Market
+]
+
+# Scale the allowed positions to the current screen resolution
+def scale_position(pos, original_size, scaled_size):
+    """Scale a position from the original image size to the scaled display size."""
+    x_scale = scaled_size[0] / original_size[0]
+    y_scale = scaled_size[1] / original_size[1]
+    return pygame.Vector2(pos.x * x_scale, pos.y * y_scale)
+
+allowed_positions = [scale_position(pos, (original_width, original_height), (screen_width, screen_height)) for pos in allowed_positions_original]
 
 # Function to load a specific row of sprites from a sprite sheet
 def load_sprites(sprite_sheet, row, num_columns, sprite_width=32, sprite_height=32, scale_factor=4, flip=False):
@@ -25,6 +57,11 @@ def load_sprites(sprite_sheet, row, num_columns, sprite_width=32, sprite_height=
             sprite = pygame.transform.flip(sprite, True, False)
         sprites.append(sprite)
     return sprites
+
+# Draw an "X" on the screen at the given position
+def draw_x(surface, position, size=20, color=(255, 0, 0)):
+    pygame.draw.line(surface, color, (position.x - size, position.y - size), (position.x + size, position.y + size), 3)
+    pygame.draw.line(surface, color, (position.x + size, position.y - size), (position.x - size, position.y + size), 3)
 
 # Unified Character class
 class Character:
@@ -101,10 +138,10 @@ class Character:
 
     def handle_input(self, click_pos):
         if self.is_player:  # Only update target if this character is the player
-            # Calculate the center of the grid cell clicked
-            grid_x = int(click_pos.x // grid_size) * grid_size + grid_size // 2
-            grid_y = int(click_pos.y // grid_size) * grid_size + grid_size // 2
-            self.target_pos = pygame.Vector2(grid_x, grid_y)
+            # Find the closest allowed position to the click
+            closest_position = min(allowed_positions, key=lambda p: p.distance_to(click_pos))
+            if closest_position.distance_to(click_pos) < grid_size // 2:  # Allow a certain proximity threshold
+                self.target_pos = closest_position
 
 # NPC Manager to handle multiple NPCs and player
 class CharacterManager:
@@ -122,7 +159,6 @@ class CharacterManager:
         for character in self.characters:
             character.move_toward_target()
             character.draw(surface)
-
 
 # Animation configurations for player and NPC
 player_animations_config = {
@@ -143,7 +179,7 @@ npc_idle_config = player_idle_config
 # Initialize the CharacterManager and add characters
 character_manager = CharacterManager()
 character_manager.add_character("Cute_Fantasy_Free/Player/player.png", player_animations_config, player_idle_config,
-                                initial_pos=(100, 100), speed=2, direction="down", is_player=True)
+                                initial_pos=(100, 100), speed=20, direction="down", is_player=True)
 character_manager.add_character("Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
                                 initial_pos=(300, 300), speed=1, direction="down")
 character_manager.add_character("Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
@@ -157,6 +193,9 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             # Send the click position to the player character only
             character_manager.player.handle_input(pygame.Vector2(event.pos))
@@ -164,11 +203,9 @@ while running:
     # Clear the screen and draw the background image
     screen.blit(background_image, (0, 0))
 
-    # Draw the grid lines for debugging
-    for x in range(0, screen_width, grid_size):
-        pygame.draw.line(screen, (0, 0, 0), (x, 0), (x, screen_height), 1)  # Vertical lines
-    for y in range(0, screen_height, grid_size):
-        pygame.draw.line(screen, (0, 0, 0), (0, y), (screen_width, y), 1)  # Horizontal lines
+    # Draw X marks at scaled allowed positions
+    for pos in allowed_positions:
+        draw_x(screen, pos)
 
     # Update and draw all characters
     character_manager.update_and_draw(screen)
