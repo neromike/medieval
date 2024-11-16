@@ -141,7 +141,7 @@ class Character:
             # Find the closest allowed position to the click
             closest_position = min(allowed_positions, key=lambda p: p.distance_to(click_pos))
             if closest_position.distance_to(click_pos) < grid_size // 2:  # Allow a certain proximity threshold
-                self.target_pos = closest_position
+                self.target_pos = closest_position.copy()
 
 # NPC Manager to handle multiple NPCs and player
 class CharacterManager:
