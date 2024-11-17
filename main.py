@@ -143,6 +143,12 @@ class Character:
             if closest_position.distance_to(click_pos) < grid_size // 2:  # Allow a certain proximity threshold
                 self.target_pos = closest_position.copy()
 
+    def check_for_allowed_position(self, allowed_positions):
+        for pos in allowed_positions:
+            if self.pos.distance_to(pos) < grid_size // 2:
+                return True
+        return False
+
 # NPC Manager to handle multiple NPCs and player
 class CharacterManager:
     def __init__(self):
@@ -187,6 +193,44 @@ character_manager.add_character("Cute_Fantasy_Free/Enemies/Skeleton.png", npc_an
 character_manager.add_character("Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
                                 initial_pos=(700, 700), speed=1, direction="up")
 
+def draw_modal(surface, text, size=(300, 200)):
+    # Calculate modal rectangle in the center of the screen
+    screen_center = pygame.Vector2(screen_width // 2, screen_height // 2)
+    rect = pygame.Rect(screen_center.x - size[0] // 2, screen_center.y - size[1] // 2, size[0], size[1])
+
+    # Draw the rectangle
+    pygame.draw.rect(surface, (255, 255, 255), rect)
+    pygame.draw.rect(surface, (0, 0, 0), rect, 3)
+
+    # Display text in the modal
+    font = pygame.font.Font(None, 36)
+    text_surf = font.render(text, True, (0, 0, 0))
+    text_rect = text_surf.get_rect(center=rect.center)
+    surface.blit(text_surf, text_rect)
+
+    return
+
+# Function to draw everything on the screen
+def draw():
+    # Draw background
+    screen.blit(background_image, (0, 0))
+
+    # Draw allowed positions as "X" marks
+    for pos in allowed_positions:
+        draw_x(screen, pos)
+
+    # Update and draw all characters
+    character_manager.update_and_draw(screen)
+
+    # Draw the modal if active
+    if modal_active:
+        draw_modal(screen, "You have arrived!")
+
+    # Update the display
+    pygame.display.flip()
+
+
+
 # Main game loop
 running = True
 while running:
@@ -197,21 +241,16 @@ while running:
             if event.key == pygame.K_ESCAPE:
                 running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            # Send the click position to the player character only
             character_manager.player.handle_input(pygame.Vector2(event.pos))
 
-    # Clear the screen and draw the background image
-    screen.blit(background_image, (0, 0))
+    # Check for modal activation
+    if character_manager.player.check_for_allowed_position(allowed_positions):
+        modal_active = True
+    else:
+        modal_active = False
 
-    # Draw X marks at scaled allowed positions
-    for pos in allowed_positions:
-        draw_x(screen, pos)
-
-    # Update and draw all characters
-    character_manager.update_and_draw(screen)
-
-    # Update the display
-    pygame.display.flip()
+    # Draw everything
+    draw()
 
     # Cap the frame rate
     pygame.time.Clock().tick(60)
