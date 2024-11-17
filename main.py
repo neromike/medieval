@@ -48,7 +48,7 @@ def scale_position(pos, original_size, scaled_size):
 allowed_positions = [scale_position(pos, (original_width, original_height), (screen_width, screen_height)) for pos in allowed_positions_original]
 
 # Function to load a specific row of sprites from a sprite sheet
-def load_sprites(sprite_sheet, row, num_columns, sprite_width=32, sprite_height=32, scale_factor=4, flip=False):
+def load_sprites(sprite_sheet, row, num_columns, sprite_width=32, sprite_height=32, scale_factor=2, flip=False):
     sprites = []
     for col in range(num_columns):
         sprite = sprite_sheet.subsurface((col * sprite_width, row * sprite_height, sprite_width, sprite_height))
