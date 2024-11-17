@@ -212,7 +212,7 @@ npc_idle_config = player_idle_config
 # Initialize the CharacterManager and add characters
 character_manager = CharacterManager()
 character_manager.add_character("player", "Cute_Fantasy_Free/Player/player.png", player_animations_config, player_idle_config,
-                                initial_pos=(100, 100), speed=20, is_player=True)
+                                initial_pos=allowed_positions[0], speed=20, is_player=True)
 character_manager.add_character("enemy1", "Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
                                 initial_pos=(scale_position(pygame.Vector2(2990, 3860))), direction="left", speed=1)
 character_manager.add_character("enemy2", "Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
