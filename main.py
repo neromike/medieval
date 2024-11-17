@@ -40,14 +40,14 @@ allowed_positions_original = [
 modal_coors_original = [pygame.Vector2(4800, 1720), pygame.Vector2(3000, 3380)]
 
 # Scale the allowed positions to the current screen resolution
-def scale_position(pos, original_size, scaled_size):
+def scale_position(pos):
     """Scale a position from the original image size to the scaled display size."""
-    x_scale = scaled_size[0] / original_size[0]
-    y_scale = scaled_size[1] / original_size[1]
+    x_scale = screen_width / original_width
+    y_scale = screen_height / original_height
     return pygame.Vector2(pos.x * x_scale, pos.y * y_scale)
 
-allowed_positions = [scale_position(pos, (original_width, original_height), (screen_width, screen_height)) for pos in allowed_positions_original]
-modal_coors = [scale_position(pos, (original_width, original_height), (screen_width, screen_height)) for pos in modal_coors_original]
+allowed_positions = [scale_position(pos) for pos in allowed_positions_original]
+modal_coors = [scale_position(pos) for pos in modal_coors_original]
 
 # Function to load a specific row of sprites from a sprite sheet
 def load_sprites(sprite_sheet, row, num_columns, sprite_width=32, sprite_height=32, scale_factor=2, flip=False):
@@ -61,9 +61,9 @@ def load_sprites(sprite_sheet, row, num_columns, sprite_width=32, sprite_height=
     return sprites
 
 # Draw an "X" on the screen at the given position
-def draw_x(surface, position, size=20, color=(255, 0, 0)):
-    pygame.draw.line(surface, color, (position.x - size, position.y - size), (position.x + size, position.y + size), 3)
-    pygame.draw.line(surface, color, (position.x + size, position.y - size), (position.x - size, position.y + size), 3)
+def draw_x(position, size=20, color=(255, 0, 0)):
+    pygame.draw.line(screen, color, (position.x - size, position.y - size), (position.x + size, position.y + size), 3)
+    pygame.draw.line(screen, color, (position.x + size, position.y - size), (position.x - size, position.y + size), 3)
 
 # Unified Character class
 class Character:
@@ -154,19 +154,22 @@ class Character:
 # NPC Manager to handle multiple NPCs and player
 class CharacterManager:
     def __init__(self):
-        self.characters = []
-        self.player = None  # Initialize player attribute to avoid defining it outside __init__
+        self.NPC = []
+        self.player = None
 
     def add_character(self, sprite_sheet_path, animations_config, idle_config, initial_pos, speed, direction, is_player=False):
         character = Character(sprite_sheet_path, animations_config, idle_config, initial_pos, speed, direction, is_player)
-        self.characters.append(character)
         if is_player:
-            self.player = character  # Assign the player character if is_player is True
+            self.player = character
+        else:
+            self.NPC.append(character)
 
-    def update_and_draw(self, surface):
-        for character in self.characters:
+    def update_and_draw(self):
+        for character in self.NPC:
             character.move_toward_target()
-            character.draw(surface)
+            character.draw(screen)
+        self.player.move_toward_target()
+        self.player.draw(screen)
 
 # Animation configurations for player and NPC
 player_animations_config = {
@@ -191,24 +194,26 @@ character_manager.add_character("Cute_Fantasy_Free/Player/player.png", player_an
 character_manager.add_character("Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
                                 initial_pos=(300, 300), speed=1, direction="down")
 character_manager.add_character("Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
-                                initial_pos=(500, 500), speed=1, direction="left")
-character_manager.add_character("Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
                                 initial_pos=(700, 700), speed=1, direction="up")
+character_manager.add_character("Cute_Fantasy_Free/Player/player.png", npc_animations_config, npc_idle_config,
+                                initial_pos=allowed_positions[5], speed=1, direction="down")
+character_manager.add_character("Cute_Fantasy_Free/Player/player.png", npc_animations_config, npc_idle_config,
+                                initial_pos=allowed_positions[4], speed=1, direction="down")
 
-def draw_modal(surface, text, size=(300, 200)):
+def draw_modal(text, size=(300, 200)):
     # Calculate modal rectangle in the center of the screen
     screen_center = pygame.Vector2(screen_width // 2, screen_height // 2)
     rect = pygame.Rect(modal_coors[0][0], modal_coors[0][1], modal_coors[1][0], modal_coors[1][1])
 
     # Draw the rectangle
-    pygame.draw.rect(surface, (255, 255, 255), rect)
-    pygame.draw.rect(surface, (0, 0, 0), rect, 3)
+    pygame.draw.rect(screen, (255, 255, 255), rect)
+    pygame.draw.rect(screen, (0, 0, 0), rect, 3)
 
     # Display text in the modal
     font = pygame.font.Font(None, 36)
     text_surf = font.render(text, True, (0, 0, 0))
     text_rect = text_surf.get_rect(center=rect.center)
-    surface.blit(text_surf, text_rect)
+    screen.blit(text_surf, text_rect)
 
     return
 
@@ -219,14 +224,14 @@ def draw():
 
     # Draw allowed positions as "X" marks
     for pos in allowed_positions:
-        draw_x(screen, pos)
+        draw_x(pos)
 
     # Update and draw all characters
-    character_manager.update_and_draw(screen)
+    character_manager.update_and_draw()
 
     # Draw the modal if active
     if modal_active:
-        draw_modal(screen, "You have arrived!")
+        draw_modal("You have arrived!")
 
     # Update the display
     pygame.display.flip()
