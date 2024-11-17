@@ -41,7 +41,7 @@ modal_coors_original = [pygame.Vector2(4800, 1720), pygame.Vector2(3000, 3380)]
 
 # Scale the allowed positions to the current screen resolution
 def scale_position(pos):
-    """Scale a position from the original image size to the scaled display size."""
+    # Scale a position from the original image size to the scaled display size.
     x_scale = screen_width / original_width
     y_scale = screen_height / original_height
     return pygame.Vector2(pos.x * x_scale, pos.y * y_scale)
@@ -67,7 +67,8 @@ def draw_x(position, size=20, color=(255, 0, 0)):
 
 # Unified Character class
 class Character:
-    def __init__(self, sprite_sheet_path, animations_config, idle_config, initial_pos, speed, direction="down", is_player=False):
+    def __init__(self, character_name, sprite_sheet_path, animations_config, idle_config, initial_pos, speed, direction="down", is_player=False):
+        self.character_name = character_name
         self.image = pygame.image.load(sprite_sheet_path)
         self.animations = self.load_animations(animations_config)
         self.idle_animations = self.load_animations(idle_config)
@@ -80,6 +81,8 @@ class Character:
         self.idle_timer = 0  # Time since last movement
         self.is_idle = False  # Flag to check if character is idle
         self.is_player = is_player  # Flag to check if character is controlled by player
+        self.hunger = 80
+        self.energy = 100
 
     def load_animations(self, config):
         animations = {}
@@ -134,9 +137,28 @@ class Character:
 
     def draw(self, surface):
         sprite = self.get_current_sprite()
+
         # Adjust position for center alignment
         adjusted_pos = (self.pos.x - sprite.get_width() // 2, self.pos.y - sprite.get_height() // 2)
         surface.blit(sprite, adjusted_pos)
+
+        # Debug text
+        font = pygame.font.Font(None, 24)
+
+        # Draw character name above the character
+        name_text = font.render(self.character_name, True, (255, 255, 255))
+        name_text_pos = (self.pos.x - name_text.get_width() // 2, self.pos.y - sprite.get_height() // 2 - 20)
+        surface.blit(name_text, name_text_pos)
+
+        # Draw hunger level next to the character
+        hunger_text = font.render(f"hunger: {self.hunger}", True, (255, 255, 255))
+        hunger_text_pos = (self.pos.x + sprite.get_width() // 2 + 5, self.pos.y - sprite.get_height() // 2)
+        surface.blit(hunger_text, hunger_text_pos)
+
+        # Draw energy level below the character
+        energy_text = font.render(f"energy: {self.energy}", True, (255, 255, 255))
+        energy_text_pos = (self.pos.x + sprite.get_width() // 2 + 5, self.pos.y + 24 - sprite.get_height() // 2)
+        surface.blit(energy_text, energy_text_pos)
 
     def handle_input(self, click_pos):
         if self.is_player:  # Only update target if this character is the player
@@ -145,7 +167,7 @@ class Character:
             if closest_position.distance_to(click_pos) < grid_size // 2:  # Allow a certain proximity threshold
                 self.target_pos = closest_position.copy()
 
-    def check_for_allowed_position(self, allowed_positions):
+    def check_for_allowed_position(self):
         for pos in allowed_positions:
             if self.pos.distance_to(pos) < grid_size // 2:
                 return True
@@ -154,20 +176,20 @@ class Character:
 # NPC Manager to handle multiple NPCs and player
 class CharacterManager:
     def __init__(self):
-        self.NPC = []
+        self.NPC = {}
         self.player = None
 
-    def add_character(self, sprite_sheet_path, animations_config, idle_config, initial_pos, speed, direction, is_player=False):
-        character = Character(sprite_sheet_path, animations_config, idle_config, initial_pos, speed, direction, is_player)
+    def add_character(self, character_name, sprite_sheet_path, animations_config, idle_config, initial_pos, speed, direction="down", is_player=False):
+        character = Character(character_name, sprite_sheet_path, animations_config, idle_config, initial_pos, speed, direction, is_player)
         if is_player:
             self.player = character
         else:
-            self.NPC.append(character)
+            self.NPC[character_name] = character
 
     def update_and_draw(self):
-        for character in self.NPC:
-            character.move_toward_target()
-            character.draw(screen)
+        for character_name in self.NPC:
+            self.NPC[character_name].move_toward_target()
+            self.NPC[character_name].draw(screen)
         self.player.move_toward_target()
         self.player.draw(screen)
 
@@ -189,20 +211,19 @@ npc_idle_config = player_idle_config
 
 # Initialize the CharacterManager and add characters
 character_manager = CharacterManager()
-character_manager.add_character("Cute_Fantasy_Free/Player/player.png", player_animations_config, player_idle_config,
-                                initial_pos=(100, 100), speed=20, direction="down", is_player=True)
-character_manager.add_character("Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
-                                initial_pos=(300, 300), speed=1, direction="down")
-character_manager.add_character("Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
-                                initial_pos=(700, 700), speed=1, direction="up")
-character_manager.add_character("Cute_Fantasy_Free/Player/player.png", npc_animations_config, npc_idle_config,
-                                initial_pos=allowed_positions[5], speed=1, direction="down")
-character_manager.add_character("Cute_Fantasy_Free/Player/player.png", npc_animations_config, npc_idle_config,
-                                initial_pos=allowed_positions[4], speed=1, direction="down")
+character_manager.add_character("player", "Cute_Fantasy_Free/Player/player.png", player_animations_config, player_idle_config,
+                                initial_pos=(100, 100), speed=20, is_player=True)
+character_manager.add_character("enemy1", "Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
+                                initial_pos=(scale_position(pygame.Vector2(2990, 3860))), direction="left", speed=1)
+character_manager.add_character("enemy2", "Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
+                                initial_pos=(scale_position(pygame.Vector2(3000, 4350))), direction="left", speed=1)
+character_manager.add_character("butcher", "Cute_Fantasy_Free/Player/player.png", npc_animations_config, npc_idle_config,
+                                initial_pos=allowed_positions[5], speed=1)
+character_manager.add_character("brewer", "Cute_Fantasy_Free/Player/player.png", npc_animations_config, npc_idle_config,
+                                initial_pos=allowed_positions[4], speed=1)
 
-def draw_modal(text, size=(300, 200)):
+def draw_modal(text):
     # Calculate modal rectangle in the center of the screen
-    screen_center = pygame.Vector2(screen_width // 2, screen_height // 2)
     rect = pygame.Rect(modal_coors[0][0], modal_coors[0][1], modal_coors[1][0], modal_coors[1][1])
 
     # Draw the rectangle
@@ -251,7 +272,7 @@ while running:
             character_manager.player.handle_input(pygame.Vector2(event.pos))
 
     # Check for modal activation
-    if character_manager.player.check_for_allowed_position(allowed_positions):
+    if character_manager.player.check_for_allowed_position():
         modal_active = True
     else:
         modal_active = False
