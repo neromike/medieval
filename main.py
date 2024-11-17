@@ -37,6 +37,7 @@ allowed_positions_original = [
     pygame.Vector2(9500, 4300),  # Church
     pygame.Vector2(9300, 1800),  # Market
 ]
+modal_coors_original = [pygame.Vector2(4800, 1720), pygame.Vector2(3000, 3380)]
 
 # Scale the allowed positions to the current screen resolution
 def scale_position(pos, original_size, scaled_size):
@@ -46,6 +47,7 @@ def scale_position(pos, original_size, scaled_size):
     return pygame.Vector2(pos.x * x_scale, pos.y * y_scale)
 
 allowed_positions = [scale_position(pos, (original_width, original_height), (screen_width, screen_height)) for pos in allowed_positions_original]
+modal_coors = [scale_position(pos, (original_width, original_height), (screen_width, screen_height)) for pos in modal_coors_original]
 
 # Function to load a specific row of sprites from a sprite sheet
 def load_sprites(sprite_sheet, row, num_columns, sprite_width=32, sprite_height=32, scale_factor=2, flip=False):
@@ -196,7 +198,7 @@ character_manager.add_character("Cute_Fantasy_Free/Enemies/Skeleton.png", npc_an
 def draw_modal(surface, text, size=(300, 200)):
     # Calculate modal rectangle in the center of the screen
     screen_center = pygame.Vector2(screen_width // 2, screen_height // 2)
-    rect = pygame.Rect(screen_center.x - size[0] // 2, screen_center.y - size[1] // 2, size[0], size[1])
+    rect = pygame.Rect(modal_coors[0][0], modal_coors[0][1], modal_coors[1][0], modal_coors[1][1])
 
     # Draw the rectangle
     pygame.draw.rect(surface, (255, 255, 255), rect)
