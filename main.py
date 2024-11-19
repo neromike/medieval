@@ -1,7 +1,6 @@
 import pygame
 import sys
 import heapq  # For priority queue in A* algorithm
-import math
 
 # Initialize pygame
 pygame.init()
@@ -39,7 +38,9 @@ allowed_positions_original = [
     {"name": "Church", "pos": pygame.Vector2(9500, 4300)},
     {"name": "Market", "pos": pygame.Vector2(9300, 1800)},
 ]
-modal_coors_original = [pygame.Vector2(4800, 1720), pygame.Vector2(3000, 3380)]
+# Modal coordinates (position and size)
+modal_position_original = pygame.Vector2(4800, 1720)
+modal_size_original = pygame.Vector2(3000, 3380)
 
 # Scale the allowed positions to the current screen resolution
 def scale_position(pos):
@@ -53,9 +54,9 @@ for loc in allowed_positions_original:
     scaled_pos = scale_position(loc["pos"])
     allowed_positions.append({"name": loc["name"], "pos": scaled_pos})
 
-modal_coors = [scale_position(pos) for pos in modal_coors_original]
-
-
+# Scale modal position and size to screen
+modal_position = scale_position(modal_position_original)
+modal_size = scale_position(modal_size_original)
 
 # Define the graph nodes and edges
 class Graph:
@@ -157,8 +158,6 @@ def astar_search(start, goal):
     path.append(start)
     path.reverse()
     return path
-
-
 
 # Function to load a specific row of sprites from a sprite sheet
 def load_sprites(sprite_sheet, row, num_columns, sprite_width=32, sprite_height=32, scale_factor=2, flip=False):
@@ -294,32 +293,12 @@ class Character:
         adjusted_pos = (self.pos.x - sprite.get_width() // 2, self.pos.y - sprite.get_height() // 2)
         surface.blit(sprite, adjusted_pos)
 
-        """
-        # Debug text
-        font = pygame.font.Font(None, 24)
-
-        # Draw character name above the character
-        name_text = font.render(self.character_name, True, (255, 255, 255))
-        name_text_pos = (self.pos.x - name_text.get_width() // 2, self.pos.y - sprite.get_height() // 2 - 20)
-        surface.blit(name_text, name_text_pos)
-
-        # Draw hunger level next to the character
-        hunger_text = font.render(f"hunger: {self.hunger}", True, (255, 255, 255))
-        hunger_text_pos = (self.pos.x + sprite.get_width() // 2 + 5, self.pos.y - sprite.get_height() // 2)
-        surface.blit(hunger_text, hunger_text_pos)
-
-        # Draw energy level below the character
-        energy_text = font.render(f"energy: {self.energy}", True, (255, 255, 255))
-        energy_text_pos = (self.pos.x + sprite.get_width() // 2 + 5, self.pos.y + 24 - sprite.get_height() // 2)
-        surface.blit(energy_text, energy_text_pos)
-        """
-
     def handle_input(self, click_pos):
         if self.is_player:  # Only update target if this character is the player
             # Find the closest allowed position to the click
             closest_location = min(allowed_positions, key=lambda loc: loc['pos'].distance_to(click_pos))
             if closest_location['pos'].distance_to(click_pos) < grid_size * 2:  # Allow a certain proximity threshold
-                self.target_location_name = closest_location['name']  # Store the name of the location
+                self.target_location_name = closest_location['name']
                 self.compute_path()
 
     def compute_path(self):
@@ -413,21 +392,160 @@ character_manager.add_character("brewer", "Cute_Fantasy_Free/Player/player.png",
 # Initialize the TimeManager
 time_manager = TimeManager()
 
-def draw_modal():
-    # Calculate modal rectangle in the center of the screen
-    rect = pygame.Rect(modal_coors[0][0], modal_coors[0][1], modal_coors[1][0], modal_coors[1][1])
+# Define a Button class for modal interactions
+class Button:
+    def __init__(self, rect, text, callback):
+        self.rect = rect
+        self.text = text
+        self.callback = callback
+        self.font = pygame.font.Font(None, 24)
+        self.text_surf = self.font.render(self.text, True, (255, 255, 255))
+        self.text_rect = self.text_surf.get_rect(center=self.rect.center)
 
-    # Draw the rectangle
-    pygame.draw.rect(screen, (255, 255, 255), rect)
-    pygame.draw.rect(screen, (0, 0, 0), rect, 3)
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                self.callback()
 
-    # Display text in the modal
-    font = pygame.font.Font(None, 36)
-    text_surf = font.render(character_manager.player.current_location_name, True, (0, 0, 0))
-    text_rect = text_surf.get_rect(center=rect.center)
-    screen.blit(text_surf, text_rect)
+    def draw(self, surface):
+        pygame.draw.rect(surface, (100, 100, 100), self.rect)
+        pygame.draw.rect(surface, (255, 255, 255), self.rect, 2)
+        surface.blit(self.text_surf, self.text_rect)
 
-    return
+# Define the FarmTile class for the farming mini-game
+class FarmTile:
+    def __init__(self, rect):
+        self.rect = rect
+        self.planted = False
+        self.growth_stage = 0
+        self.growth_time = 0
+        self.max_growth_stage = 3
+        self.growth_stage_durations = [5000, 5000, 5000]  # milliseconds for each stage
+        self.last_update_time = pygame.time.get_ticks()
+
+    def handle_click(self):
+        if not self.planted:
+            self.planted = True
+            self.growth_stage = 1
+            self.last_update_time = pygame.time.get_ticks()
+        elif self.growth_stage == self.max_growth_stage:
+            # Harvest the plant
+            self.planted = False
+            self.growth_stage = 0
+            # Maybe add to player's inventory
+
+    def update(self):
+        if self.planted and self.growth_stage < self.max_growth_stage:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.last_update_time > self.growth_stage_durations[self.growth_stage - 1]:
+                self.growth_stage += 1
+                self.last_update_time = current_time
+
+    def draw(self, surface):
+        # Draw the tile
+        if self.planted:
+            # Draw the plant image according to growth stage
+            color = [(139,69,19), (85,107,47), (34,139,34), (0,128,0)][self.growth_stage]
+            pygame.draw.rect(surface, color, self.rect)
+        else:
+            # Draw soil
+            pygame.draw.rect(surface, (139,69,19), self.rect)
+        # Draw tile border
+        pygame.draw.rect(surface, (0, 0, 0), self.rect, 1)
+
+# Define the FarmGame class for the farming mini-game
+class FarmGame:
+    def __init__(self, modal_rect):
+        self.modal_rect = modal_rect
+        self.farm_rect = pygame.Rect(modal_rect.x + 20, modal_rect.y + 50, modal_rect.width - 40, modal_rect.height - 70)
+        self.tiles = []  # List of tiles
+        self.init_tiles()
+
+    def init_tiles(self):
+        # Initialize a grid of farm tiles
+        tile_size = 50
+        rows = self.farm_rect.height // tile_size
+        cols = self.farm_rect.width // tile_size
+        self.tiles = []
+        for row in range(rows):
+            for col in range(cols):
+                tile_rect = pygame.Rect(self.farm_rect.x + col * tile_size, self.farm_rect.y + row * tile_size, tile_size, tile_size)
+                tile = FarmTile(tile_rect)
+                self.tiles.append(tile)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            # Check if click is within any tile
+            for tile in self.tiles:
+                if tile.rect.collidepoint(event.pos):
+                    tile.handle_click()
+                    break
+
+    def update(self):
+        # Update the growth of plants
+        for tile in self.tiles:
+            tile.update()
+
+    def draw(self, surface):
+        # Draw the farm tiles
+        for tile in self.tiles:
+            tile.draw(surface)
+
+# Define the Modal class to handle different modal windows
+class Modal:
+    def __init__(self, position, size):
+        self.rect = pygame.Rect(position.x, position.y, size.x, size.y)
+        self.active = False
+        self.background_image = None
+        self.interactive_elements = []
+        self.location_name = ""
+        self.farm_game = None  # Will hold the farming mini-game instance when at farm
+
+    def set_content(self, location_name):
+        self.location_name = location_name
+        # Load the background image and interactive components based on location
+        if location_name == "Farm":
+            # Load or create the background image for the farm modal
+            self.background_image = pygame.Surface(self.rect.size)
+            self.background_image.fill((200, 255, 200))  # Light green background
+            # Initialize the farming mini-game
+            self.farm_game = FarmGame(self.rect)
+        else:
+            # For other locations, we can have different images or just a color
+            self.background_image = pygame.Surface(self.rect.size)
+            self.background_image.fill((200, 200, 200))
+            self.farm_game = None  # No farming game at other locations
+
+    def handle_event(self, event):
+        if self.active:
+            if self.farm_game:
+                self.farm_game.handle_event(event)
+            # Handle other interactive elements
+
+    def update(self):
+        if self.active:
+            if self.farm_game:
+                self.farm_game.update()
+            # Update other elements
+
+    def draw(self, surface):
+        if self.active:
+            # Draw the modal background
+            surface.blit(self.background_image, self.rect.topleft)
+            # Draw the interactive elements
+            if self.farm_game:
+                self.farm_game.draw(surface)
+            else:
+                # For other locations, display the location name
+                font = pygame.font.Font(None, 36)
+                text_surf = font.render(self.location_name, True, (0, 0, 0))
+                text_rect = text_surf.get_rect(center=self.rect.center)
+                surface.blit(text_surf, text_rect)
+            # Draw the modal border
+            pygame.draw.rect(surface, (0, 0, 0), self.rect, 3)
+
+# Initialize the Modal
+modal = Modal(modal_position, modal_size)
 
 # Function to draw everything on the screen
 def draw():
@@ -449,8 +567,8 @@ def draw():
     character_manager.draw()
 
     # Draw the modal if active
-    if modal_active:
-        draw_modal()
+    if modal.active:
+        modal.draw(screen)
 
     # Draw current time
     time_manager.draw_time(screen)
@@ -460,7 +578,6 @@ def draw():
 
 # Main game loop
 running = True
-modal_active = False  # Initialize modal_active
 curr_location = ""       # Initialize modal_text
 in_game_movement_speed = 200  # Pixels per in-game minute
 
@@ -472,7 +589,12 @@ while running:
             if event.key == pygame.K_ESCAPE:
                 running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
+            if modal.active:
+                modal.handle_event(event)
             character_manager.player.handle_input(pygame.Vector2(event.pos))
+
+    if modal.active:
+        modal.update()
 
     # Update character positions and get distance moved by player
     distance_moved = character_manager.update()
@@ -488,9 +610,10 @@ while running:
     # Check if player has arrived at a new location
     if character_manager.player.has_arrived_at_new_location():
         # Display modal
-        modal_active = True
+        modal.active = True
+        modal.set_content(character_manager.player.current_location_name)
     elif not character_manager.player.path:
-        modal_active = False
+        modal.active = False
 
     # Draw everything
     draw()
