@@ -40,25 +40,35 @@ allowed_positions_original = [
     {"name": "Church", "pos": pygame.Vector2(9500, 4300)},
     {"name": "Market", "pos": pygame.Vector2(9300, 1800)},
 ]
-# Modal coordinates (position and size)
+# Define modal coordinates (position and size)
 modal_position_original = pygame.Vector2(4800, 1720)
 modal_size_original = pygame.Vector2(3000, 3380)
 
-# Scale the allowed positions to the current screen resolution
+# Define intermediate nodes (positions the player passes through but can't stop at)
+intermediate_positions_original = [
+    {"pos": pygame.Vector2(2500, 4500)},
+    {"pos": pygame.Vector2(3500, 2500)},
+    {"pos": pygame.Vector2(4500, 2500)},
+]
+
 def scale_position(pos):
     # Scale a position from the original image size to the scaled display size.
     x_scale = screen_width / original_width
     y_scale = screen_height / original_height
     return pygame.Vector2(pos.x * x_scale, pos.y * y_scale)
 
+# Scale allowed positions
 allowed_positions = []
 for loc in allowed_positions_original:
     scaled_pos = scale_position(loc["pos"])
     allowed_positions.append({"name": loc["name"], "pos": scaled_pos})
 
-# Scale modal position and size to screen
+# Scale modal position and size
 modal_position = scale_position(modal_position_original)
 modal_size = scale_position(modal_size_original)
+
+# Scale intermediate positions
+intermediate_positions = [scale_position(node['pos']) for node in intermediate_positions_original]
 
 # Define the graph nodes and edges
 class Graph:
@@ -87,6 +97,17 @@ for loc in allowed_positions:
     node_id_counter += 1
     graph.add_node(node_id, loc['pos'])
     node_ids[loc['name']] = node_id
+node_id_counter = len(allowed_positions)
+
+# Add intermediate nodes to the graph
+for pos in intermediate_positions:
+    node_id = node_id_counter
+    node_id_counter += 1
+    graph.add_node(node_id, pos)
+
+# Update connections to include intermediate nodes
+# For example, connecting 'Farm' to an intermediate node, then to 'Herbalist'
+intermediate_node_ids = list(range(len(allowed_positions), len(allowed_positions) + len(intermediate_positions)))
 
 # Example intermediate nodes (you should define actual paths)
 # For simplicity, let's assume direct paths between some locations
@@ -98,7 +119,8 @@ def distance(pos1, pos2):
 
 # Define connections
 connections = [
-    ("Farm", "Herbalist"),
+    ("Farm", intermediate_node_ids[0]),
+    (intermediate_node_ids[0], "Herbalist"),
     ("Herbalist", "Tavern"),
     ("Tavern", "Bakery"),
     ("Bakery", "Brewery"),
@@ -112,14 +134,21 @@ connections = [
     ("Manor", "Church"),
     ("Church", "Market"),
     ("Market", "Butcher"),
-    ("Butcher", "Elder"),  # Loop back to Elder
+    ("Butcher", "Elder"),
     # ... add more connections as needed
 ]
 
+# Convert named locations to node IDs in connections
+def get_node_id(name_or_id):
+    if isinstance(name_or_id, str):
+        return node_ids[name_or_id]
+    else:
+        return name_or_id
+
 # Add edges to the graph
-for from_loc_name, to_loc_name in connections:
-    from_node = node_ids[from_loc_name]
-    to_node = node_ids[to_loc_name]
+for from_loc, to_loc in connections:
+    from_node = get_node_id(from_loc)
+    to_node = get_node_id(to_loc)
     from_pos = graph.nodes[from_node]
     to_pos = graph.nodes[to_node]
     cost = distance(from_pos, to_pos)
@@ -295,30 +324,30 @@ class Character:
         surface.blit(sprite, adjusted_pos)
 
     def handle_input(self, click_pos):
-        if self.is_player:  # Only update target if this character is the player
-            # Find the closest allowed position to the click
-            closest_location = min(allowed_positions, key=lambda loc: loc['pos'].distance_to(click_pos))
-            if closest_location['pos'].distance_to(click_pos) < grid_size * 2:  # Allow a certain proximity threshold
+        if self.is_player:
+            # Only consider allowed_positions for destinations
+            closest_location = min(
+                allowed_positions,
+                key=lambda loc: loc['pos'].distance_to(click_pos)
+            )
+            if closest_location['pos'].distance_to(click_pos) < grid_size * 2:
                 self.target_location_name = closest_location['name']
                 self.compute_path()
 
     def compute_path(self):
-        # Find the closest node to current position
-        closest_node = None
-        min_distance = float('inf')
-        for node_id, node_pos in graph.nodes.items():
-            dist = (self.pos - node_pos).length()
-            if dist < min_distance:
-                min_distance = dist
-                closest_node = node_id
+        # Find the closest node to current position (could be an intermediate node)
+        closest_node = min(
+            graph.nodes.keys(),
+            key=lambda node_id: (self.pos - graph.nodes[node_id]).length()
+        )
 
-        # Get target node
+        # Get target node (must be a named location)
         target_node = node_ids[self.target_location_name]
 
         # Compute path using A*
         self.path = astar_search(closest_node, target_node)
 
-        # Insert current position as the starting point
+        # Ensure the path starts from the current position
         if self.pos != graph.nodes[closest_node]:
             self.path.insert(0, closest_node)
 
@@ -330,11 +359,14 @@ class Character:
         return False
 
     def has_arrived_at_new_location(self):
-        # Check if the player has moved to a new location
-        if self.previous_location_name != self.current_location_name and self.current_location_name is not None:
-            return True
-        else:
-            return False
+        # Check if the player is at an allowed position (named location)
+        for loc in allowed_positions:
+            if self.pos.distance_to(loc['pos']) < grid_size // 2:
+                if self.current_location_name != loc['name']:
+                    self.previous_location_name = self.current_location_name
+                    self.current_location_name = loc['name']
+                    return True
+        return False
 
 # NPC Manager to handle multiple NPCs and player
 class CharacterManager:
