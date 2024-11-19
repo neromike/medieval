@@ -55,6 +55,8 @@ for loc in allowed_positions_original:
 
 modal_coors = [scale_position(pos) for pos in modal_coors_original]
 
+
+
 # Define the graph nodes and edges
 class Graph:
     def __init__(self):
@@ -90,7 +92,7 @@ for loc in allowed_positions:
 def distance(pos1, pos2):
     return (pos1 - pos2).length()
 
-# Define connections (this is an example; adjust according to your map)
+# Define connections
 connections = [
     ("Farm", "Herbalist"),
     ("Herbalist", "Tavern"),
@@ -155,6 +157,8 @@ def astar_search(start, goal):
     path.append(start)
     path.reverse()
     return path
+
+
 
 # Function to load a specific row of sprites from a sprite sheet
 def load_sprites(sprite_sheet, row, num_columns, sprite_width=32, sprite_height=32, scale_factor=2, flip=False):
@@ -249,7 +253,7 @@ class Character:
                 if self.frame_index >= len(self.animations[self.direction]):
                     self.frame_index = 0
             else:
-                self.pos = target_pos
+                self.pos = target_pos.copy()
                 self.path.pop(0)
                 distance_moved = distance
 
@@ -396,7 +400,7 @@ npc_idle_config = player_idle_config
 character_manager = CharacterManager()
 initial_pos = allowed_positions[0]['pos']
 character_manager.add_character("player", "Cute_Fantasy_Free/Player/player.png", player_animations_config, player_idle_config,
-                                initial_pos=initial_pos, speed=5, is_player=True)
+                                initial_pos=initial_pos, speed=20, is_player=True)
 character_manager.add_character("enemy1", "Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
                                 initial_pos=(scale_position(pygame.Vector2(2990, 3860))), direction="left", speed=1)
 character_manager.add_character("enemy2", "Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
