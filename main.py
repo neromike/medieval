@@ -20,22 +20,22 @@ background_image = pygame.transform.scale(background_image_original, (screen_wid
 # Grid settings
 grid_size = 100  # Size of each grid cell in pixels
 
-# Define allowed movement positions based on the original image's coordinates
+# Define allowed movement positions with names based on the original image's coordinates
 allowed_positions_original = [
-    pygame.Vector2(1300, 2500), # Farm
-    pygame.Vector2(1100, 5000), # Miller
-    pygame.Vector2(4100, 630),  # Tavern
-    pygame.Vector2(5300, 630),  # Bakery
-    pygame.Vector2(6600, 630),  # Brewery
-    pygame.Vector2(7900, 630),  # Butcher
-    pygame.Vector2(4300, 2600),  # Herbalist
-    pygame.Vector2(4200, 4800),  # Cartwright
-    pygame.Vector2(5000, 5800),  # Carpenter
-    pygame.Vector2(6400, 5800),  # Blacksmith
-    pygame.Vector2(7600, 5800),  # Elder
-    pygame.Vector2(9700, 5900),  # Manor
-    pygame.Vector2(9500, 4300),  # Church
-    pygame.Vector2(9300, 1800),  # Market
+    {"name": "Farm", "pos": pygame.Vector2(1300, 2500)},
+    {"name": "Miller", "pos": pygame.Vector2(1100, 5000)},
+    {"name": "Tavern", "pos": pygame.Vector2(4100, 630)},
+    {"name": "Bakery", "pos": pygame.Vector2(5300, 630)},
+    {"name": "Brewery", "pos": pygame.Vector2(6600, 630)},
+    {"name": "Butcher", "pos": pygame.Vector2(7900, 630)},
+    {"name": "Herbalist", "pos": pygame.Vector2(4300, 2600)},
+    {"name": "Cartwright", "pos": pygame.Vector2(4200, 4800)},
+    {"name": "Carpenter", "pos": pygame.Vector2(5000, 5800)},
+    {"name": "Blacksmith", "pos": pygame.Vector2(6400, 5800)},
+    {"name": "Elder", "pos": pygame.Vector2(7600, 5800)},
+    {"name": "Manor", "pos": pygame.Vector2(9700, 5900)},
+    {"name": "Church", "pos": pygame.Vector2(9500, 4300)},
+    {"name": "Market", "pos": pygame.Vector2(9300, 1800)},
 ]
 modal_coors_original = [pygame.Vector2(4800, 1720), pygame.Vector2(3000, 3380)]
 
@@ -46,7 +46,11 @@ def scale_position(pos):
     y_scale = screen_height / original_height
     return pygame.Vector2(pos.x * x_scale, pos.y * y_scale)
 
-allowed_positions = [scale_position(pos) for pos in allowed_positions_original]
+allowed_positions = []
+for loc in allowed_positions_original:
+    scaled_pos = scale_position(loc["pos"])
+    allowed_positions.append({"name": loc["name"], "pos": scaled_pos})
+
 modal_coors = [scale_position(pos) for pos in modal_coors_original]
 
 # Function to load a specific row of sprites from a sprite sheet
@@ -83,6 +87,8 @@ class Character:
         self.is_player = is_player  # Flag to check if character is controlled by player
         self.hunger = 80
         self.energy = 100
+        self.current_location_name = None
+        self.target_location_name = None
 
     def load_animations(self, config):
         animations = {}
@@ -163,13 +169,15 @@ class Character:
     def handle_input(self, click_pos):
         if self.is_player:  # Only update target if this character is the player
             # Find the closest allowed position to the click
-            closest_position = min(allowed_positions, key=lambda p: p.distance_to(click_pos))
-            if closest_position.distance_to(click_pos) < grid_size // 2:  # Allow a certain proximity threshold
-                self.target_pos = closest_position.copy()
+            closest_location = min(allowed_positions, key=lambda loc: loc['pos'].distance_to(click_pos))
+            if closest_location['pos'].distance_to(click_pos) < grid_size // 2:  # Allow a certain proximity threshold
+                self.target_pos = closest_location['pos'].copy()
+                self.target_location_name = closest_location['name']  # Store the name of the location
 
     def check_for_allowed_position(self):
-        for pos in allowed_positions:
-            if self.pos.distance_to(pos) < grid_size // 2:
+        for loc in allowed_positions:
+            if self.pos.distance_to(loc['pos']) < grid_size // 2:
+                self.current_location_name = loc['name']
                 return True
         return False
 
@@ -212,15 +220,15 @@ npc_idle_config = player_idle_config
 # Initialize the CharacterManager and add characters
 character_manager = CharacterManager()
 character_manager.add_character("player", "Cute_Fantasy_Free/Player/player.png", player_animations_config, player_idle_config,
-                                initial_pos=allowed_positions[0], speed=20, is_player=True)
+                                initial_pos=allowed_positions[0]['pos'], speed=20, is_player=True)
 character_manager.add_character("enemy1", "Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
                                 initial_pos=(scale_position(pygame.Vector2(2990, 3860))), direction="left", speed=1)
 character_manager.add_character("enemy2", "Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
                                 initial_pos=(scale_position(pygame.Vector2(3000, 4350))), direction="left", speed=1)
 character_manager.add_character("butcher", "Cute_Fantasy_Free/Player/player.png", npc_animations_config, npc_idle_config,
-                                initial_pos=allowed_positions[5], speed=1)
+                                initial_pos=allowed_positions[5]['pos'], speed=1)
 character_manager.add_character("brewer", "Cute_Fantasy_Free/Player/player.png", npc_animations_config, npc_idle_config,
-                                initial_pos=allowed_positions[4], speed=1)
+                                initial_pos=allowed_positions[4]['pos'], speed=1)
 
 def draw_modal(text):
     # Calculate modal rectangle in the center of the screen
@@ -244,15 +252,15 @@ def draw():
     screen.blit(background_image, (0, 0))
 
     # Draw allowed positions as "X" marks
-    for pos in allowed_positions:
-        draw_x(pos)
+    for loc in allowed_positions:
+        draw_x(loc['pos'])
 
     # Update and draw all characters
     character_manager.update_and_draw()
 
     # Draw the modal if active
     if modal_active:
-        draw_modal("You have arrived!")
+        draw_modal(modal_text)
 
     # Update the display
     pygame.display.flip()
@@ -261,6 +269,8 @@ def draw():
 
 # Main game loop
 running = True
+modal_active = False  # Initialize modal_active
+modal_text = ""       # Initialize modal_text
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -274,8 +284,10 @@ while running:
     # Check for modal activation
     if character_manager.player.check_for_allowed_position():
         modal_active = True
+        modal_text = f"You have arrived at {character_manager.player.current_location_name}!"
     else:
         modal_active = False
+        modal_text = ""
 
     # Draw everything
     draw()
