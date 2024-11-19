@@ -616,7 +616,7 @@ while running:
             modal.set_content(character_manager.player.current_location_name, farm_game)
         else:
             modal.set_content(character_manager.player.current_location_name)
-    elif not character_manager.player.path:
+    elif character_manager.player.current_location_name == None:
         modal.active = False
 
     # Draw everything
