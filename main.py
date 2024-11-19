@@ -7,8 +7,10 @@ pygame.init()
 
 # Screen settings
 screen_info = pygame.display.Info()  # Get screen resolution
-screen_width, screen_height = screen_info.current_w, screen_info.current_h
-screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+#screen_width, screen_height = screen_info.current_w, screen_info.current_h
+#screen = pygame.display.set_mode((screen_width, screen_height), pygame.FULLSCREEN)
+screen_width, screen_height = 1280, 720
+screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("Medieval")
 
 # Load the background image (original size)
@@ -19,7 +21,7 @@ original_width, original_height = background_image_original.get_size()
 background_image = pygame.transform.scale(background_image_original, (screen_width, screen_height))
 
 # Grid settings
-grid_size = 100  # Size of each grid cell in pixels
+grid_size = 20  # Size of each grid cell in pixels
 
 # Define allowed movement positions with names based on the original image's coordinates
 allowed_positions_original = [
@@ -219,7 +221,7 @@ class Character:
         self.energy = 100
         self.current_location_name = None
         self.target_location_name = None
-        self.previous_location_name = None  # Added to track previous location
+        self.previous_location_name = None
 
     def load_animations(self, config):
         animations = {}
@@ -231,6 +233,7 @@ class Character:
     def move_along_path(self):
         distance_moved = 0  # Initialize distance moved
         if self.path:
+            self.current_location_name = None
             target_node = self.path[0]
             target_pos = graph.nodes[target_node]
 
@@ -463,7 +466,7 @@ class FarmGame:
 
     def init_tiles(self):
         # Initialize a grid of farm tiles
-        tile_size = 50
+        tile_size = 100
         rows = self.farm_rect.height // tile_size
         cols = self.farm_rect.width // tile_size
         self.tiles = []
@@ -501,15 +504,15 @@ class Modal:
         self.location_name = ""
         self.farm_game = None  # Will hold the farming mini-game instance when at farm
 
-    def set_content(self, location_name):
+    def set_content(self, location_name, farm_game=None):
         self.location_name = location_name
         # Load the background image and interactive components based on location
         if location_name == "Farm":
             # Load or create the background image for the farm modal
             self.background_image = pygame.Surface(self.rect.size)
             self.background_image.fill((200, 255, 200))  # Light green background
-            # Initialize the farming mini-game
-            self.farm_game = FarmGame(self.rect)
+            # Use the pre-initialized farming mini-game
+            self.farm_game = farm_game
         else:
             # For other locations, we can have different images or just a color
             self.background_image = pygame.Surface(self.rect.size)
@@ -526,7 +529,6 @@ class Modal:
         if self.active:
             if self.farm_game:
                 self.farm_game.update()
-            # Update other elements
 
     def draw(self, surface):
         if self.active:
@@ -547,7 +549,10 @@ class Modal:
 # Initialize the Modal
 modal = Modal(modal_position, modal_size)
 
-# Function to draw everything on the screen
+# Initialize the FarmGame once when the program first runs
+farm_game = FarmGame(modal.rect)
+
+# Function to draw everything on the screen, other than modal content
 def draw():
     # Draw background
     screen.blit(background_image, (0, 0))
@@ -578,7 +583,6 @@ def draw():
 
 # Main game loop
 running = True
-curr_location = ""       # Initialize modal_text
 in_game_movement_speed = 200  # Pixels per in-game minute
 
 while running:
@@ -599,19 +603,19 @@ while running:
     # Update character positions and get distance moved by player
     distance_moved = character_manager.update()
 
+    # Advance time whenever Player is moving
     if distance_moved > 0:
-        # Player is moving, advance time
         time_increment_in_minutes = distance_moved / in_game_movement_speed
         time_manager.advance_time(time_increment_in_minutes)
-    else:
-        # Player is idle; time does not advance
-        pass
 
     # Check if player has arrived at a new location
     if character_manager.player.has_arrived_at_new_location():
         # Display modal
         modal.active = True
-        modal.set_content(character_manager.player.current_location_name)
+        if character_manager.player.current_location_name == "Farm":
+            modal.set_content(character_manager.player.current_location_name, farm_game)
+        else:
+            modal.set_content(character_manager.player.current_location_name)
     elif not character_manager.player.path:
         modal.active = False
 
