@@ -1,5 +1,7 @@
 import pygame
 import sys
+import heapq  # For priority queue in A* algorithm
+import math
 
 # Initialize pygame
 pygame.init()
@@ -53,6 +55,107 @@ for loc in allowed_positions_original:
 
 modal_coors = [scale_position(pos) for pos in modal_coors_original]
 
+# Define the graph nodes and edges
+class Graph:
+    def __init__(self):
+        self.nodes = {}  # key: node id, value: position
+        self.edges = {}  # key: node id, value: list of tuples (neighbor_id, cost)
+
+    def add_node(self, node_id, position):
+        self.nodes[node_id] = position
+        self.edges[node_id] = []
+
+    def add_edge(self, from_node, to_node, cost):
+        self.edges[from_node].append((to_node, cost))
+
+# Create the graph
+graph = Graph()
+
+# Add nodes to the graph
+# Assign an id to each node
+node_id_counter = 0
+node_ids = {}  # Map positions to node ids
+
+for loc in allowed_positions:
+    node_id = node_id_counter
+    node_id_counter += 1
+    graph.add_node(node_id, loc['pos'])
+    node_ids[loc['name']] = node_id
+
+# Example intermediate nodes (you should define actual paths)
+# For simplicity, let's assume direct paths between some locations
+# In a real game, you'd define paths that follow roads or other constraints
+
+# Add edges (paths) between nodes
+def distance(pos1, pos2):
+    return (pos1 - pos2).length()
+
+# Define connections (this is an example; adjust according to your map)
+connections = [
+    ("Farm", "Herbalist"),
+    ("Herbalist", "Tavern"),
+    ("Tavern", "Bakery"),
+    ("Bakery", "Brewery"),
+    ("Brewery", "Butcher"),
+    ("Herbalist", "Cartwright"),
+    ("Cartwright", "Miller"),
+    ("Miller", "Carpenter"),
+    ("Carpenter", "Blacksmith"),
+    ("Blacksmith", "Elder"),
+    ("Elder", "Manor"),
+    ("Manor", "Church"),
+    ("Church", "Market"),
+    ("Market", "Butcher"),
+    ("Butcher", "Elder"),  # Loop back to Elder
+    # ... add more connections as needed
+]
+
+# Add edges to the graph
+for from_loc_name, to_loc_name in connections:
+    from_node = node_ids[from_loc_name]
+    to_node = node_ids[to_loc_name]
+    from_pos = graph.nodes[from_node]
+    to_pos = graph.nodes[to_node]
+    cost = distance(from_pos, to_pos)
+    graph.add_edge(from_node, to_node, cost)
+    graph.add_edge(to_node, from_node, cost)  # Assuming bidirectional paths
+
+# A* Pathfinding algorithm
+def heuristic(a, b):
+    return (graph.nodes[a] - graph.nodes[b]).length()
+
+def astar_search(start, goal):
+    frontier = []
+    heapq.heappush(frontier, (0, start))
+    came_from = {}
+    cost_so_far = {}
+    came_from[start] = None
+    cost_so_far[start] = 0
+
+    while frontier:
+        _, current = heapq.heappop(frontier)
+
+        if current == goal:
+            break
+
+        for neighbor, cost in graph.edges[current]:
+            new_cost = cost_so_far[current] + cost
+            if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
+                cost_so_far[neighbor] = new_cost
+                priority = new_cost + heuristic(goal, neighbor)
+                heapq.heappush(frontier, (priority, neighbor))
+                came_from[neighbor] = current
+
+    # Reconstruct path
+    current = goal
+    path = []
+    while current != start:
+        path.append(current)
+        current = came_from[current]
+    path.append(start)
+    path.reverse()
+    return path
+
 # Function to load a specific row of sprites from a sprite sheet
 def load_sprites(sprite_sheet, row, num_columns, sprite_width=32, sprite_height=32, scale_factor=2, flip=False):
     sprites = []
@@ -102,7 +205,7 @@ class Character:
         self.idle_animations = self.load_animations(idle_config)
         self.pos = pygame.Vector2(initial_pos)
         self.speed = speed
-        self.target_pos = None
+        self.path = []
         self.direction = direction
         self.frame_index = 0
         self.animation_speed = 0.1
@@ -122,16 +225,20 @@ class Character:
             animations[direction] = load_sprites(self.image, row, num_columns, flip=flip)
         return animations
 
-    def move_toward_target(self):
+    def move_along_path(self):
         distance_moved = 0  # Initialize distance moved
-        if self.target_pos:
-            old_pos = self.pos.copy()
-            move_direction = self.target_pos - self.pos
+        if self.path:
+            target_node = self.path[0]
+            target_pos = graph.nodes[target_node]
+
+            move_direction = target_pos - self.pos
             distance = move_direction.length()
             if distance > self.speed:
                 move_direction = move_direction.normalize()
+                old_pos = self.pos.copy()
                 self.pos += move_direction * self.speed
                 self.update_direction(move_direction)
+                distance_moved = (self.pos - old_pos).length()
 
                 # Reset idle timer and flag when moving
                 self.idle_timer = 0
@@ -142,15 +249,15 @@ class Character:
                 if self.frame_index >= len(self.animations[self.direction]):
                     self.frame_index = 0
             else:
-                self.pos = self.target_pos
-                self.target_pos = None
+                self.pos = target_pos
+                self.path.pop(0)
+                distance_moved = distance
 
-                # Update previous location name
-                self.previous_location_name = self.current_location_name
-                self.current_location_name = self.target_location_name
+                if not self.path:
+                    # Arrived at destination
+                    self.previous_location_name = self.current_location_name
+                    self.current_location_name = self.target_location_name
 
-            # Calculate distance moved
-            distance_moved = (self.pos - old_pos).length()
         else:
             # Increment idle timer and ensure idle animation updates
             self.idle_timer += 1
@@ -205,9 +312,29 @@ class Character:
         if self.is_player:  # Only update target if this character is the player
             # Find the closest allowed position to the click
             closest_location = min(allowed_positions, key=lambda loc: loc['pos'].distance_to(click_pos))
-            if closest_location['pos'].distance_to(click_pos) < grid_size // 2:  # Allow a certain proximity threshold
-                self.target_pos = closest_location['pos'].copy()
+            if closest_location['pos'].distance_to(click_pos) < grid_size * 2:  # Allow a certain proximity threshold
                 self.target_location_name = closest_location['name']  # Store the name of the location
+                self.compute_path()
+
+    def compute_path(self):
+        # Find the closest node to current position
+        closest_node = None
+        min_distance = float('inf')
+        for node_id, node_pos in graph.nodes.items():
+            dist = (self.pos - node_pos).length()
+            if dist < min_distance:
+                min_distance = dist
+                closest_node = node_id
+
+        # Get target node
+        target_node = node_ids[self.target_location_name]
+
+        # Compute path using A*
+        self.path = astar_search(closest_node, target_node)
+
+        # Insert current position as the starting point
+        if self.pos != graph.nodes[closest_node]:
+            self.path.insert(0, closest_node)
 
     def check_for_allowed_position(self):
         for loc in allowed_positions:
@@ -238,8 +365,8 @@ class CharacterManager:
 
     def update(self):
         for character_name in self.NPC:
-            self.NPC[character_name].move_toward_target()
-        distance_moved = self.player.move_toward_target()
+            self.NPC[character_name].move_along_path()
+        distance_moved = self.player.move_along_path()
         return distance_moved
 
     def draw(self):
@@ -265,8 +392,9 @@ npc_idle_config = player_idle_config
 
 # Initialize the CharacterManager and add characters
 character_manager = CharacterManager()
+initial_pos = allowed_positions[0]['pos']
 character_manager.add_character("player", "Cute_Fantasy_Free/Player/player.png", player_animations_config, player_idle_config,
-                                initial_pos=allowed_positions[0]['pos'], speed=20, is_player=True)
+                                initial_pos=initial_pos, speed=5, is_player=True)
 character_manager.add_character("enemy1", "Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
                                 initial_pos=(scale_position(pygame.Vector2(2990, 3860))), direction="left", speed=1)
 character_manager.add_character("enemy2", "Cute_Fantasy_Free/Enemies/Skeleton.png", npc_animations_config, npc_idle_config,
@@ -303,6 +431,13 @@ def draw():
     # Draw allowed positions as "X" marks
     for loc in allowed_positions:
         draw_x(loc['pos'])
+
+    # Draw edges (paths) between nodes
+    for node_id, edges in graph.edges.items():
+        for neighbor_id, _ in edges:
+            start_pos = graph.nodes[node_id]
+            end_pos = graph.nodes[neighbor_id]
+            pygame.draw.line(screen, (255, 255, 0), start_pos, end_pos, 2)
 
     # Draw all characters
     character_manager.draw()
@@ -349,7 +484,7 @@ while running:
         # Display modal
         modal_active = True
         modal_text = f"You have arrived at {character_manager.player.current_location_name}!"
-    elif character_manager.player.target_pos is None:
+    elif not character_manager.player.path:
         modal_active = False
         modal_text = ""
 
