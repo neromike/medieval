@@ -290,6 +290,7 @@ class Character:
         adjusted_pos = (self.pos.x - sprite.get_width() // 2, self.pos.y - sprite.get_height() // 2)
         surface.blit(sprite, adjusted_pos)
 
+        """
         # Debug text
         font = pygame.font.Font(None, 24)
 
@@ -307,6 +308,7 @@ class Character:
         energy_text = font.render(f"energy: {self.energy}", True, (255, 255, 255))
         energy_text_pos = (self.pos.x + sprite.get_width() // 2 + 5, self.pos.y + 24 - sprite.get_height() // 2)
         surface.blit(energy_text, energy_text_pos)
+        """
 
     def handle_input(self, click_pos):
         if self.is_player:  # Only update target if this character is the player
@@ -407,7 +409,7 @@ character_manager.add_character("brewer", "Cute_Fantasy_Free/Player/player.png",
 # Initialize the TimeManager
 time_manager = TimeManager()
 
-def draw_modal(text):
+def draw_modal():
     # Calculate modal rectangle in the center of the screen
     rect = pygame.Rect(modal_coors[0][0], modal_coors[0][1], modal_coors[1][0], modal_coors[1][1])
 
@@ -417,7 +419,7 @@ def draw_modal(text):
 
     # Display text in the modal
     font = pygame.font.Font(None, 36)
-    text_surf = font.render(text, True, (0, 0, 0))
+    text_surf = font.render(character_manager.player.current_location_name, True, (0, 0, 0))
     text_rect = text_surf.get_rect(center=rect.center)
     screen.blit(text_surf, text_rect)
 
@@ -444,7 +446,7 @@ def draw():
 
     # Draw the modal if active
     if modal_active:
-        draw_modal(modal_text)
+        draw_modal()
 
     # Draw current time
     time_manager.draw_time(screen)
@@ -455,7 +457,7 @@ def draw():
 # Main game loop
 running = True
 modal_active = False  # Initialize modal_active
-modal_text = ""       # Initialize modal_text
+curr_location = ""       # Initialize modal_text
 in_game_movement_speed = 200  # Pixels per in-game minute
 
 while running:
@@ -483,10 +485,8 @@ while running:
     if character_manager.player.has_arrived_at_new_location():
         # Display modal
         modal_active = True
-        modal_text = f"You have arrived at {character_manager.player.current_location_name}!"
     elif not character_manager.player.path:
         modal_active = False
-        modal_text = ""
 
     # Draw everything
     draw()
