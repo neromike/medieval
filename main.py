@@ -69,6 +69,30 @@ def draw_x(position, size=20, color=(255, 0, 0)):
     pygame.draw.line(screen, color, (position.x - size, position.y - size), (position.x + size, position.y + size), 3)
     pygame.draw.line(screen, color, (position.x + size, position.y - size), (position.x - size, position.y + size), 3)
 
+# TimeManager class to handle the game's time
+class TimeManager:
+    def __init__(self):
+        self.total_minutes = 8 * 60  # Start at Day 1, 8:00 AM
+
+    def advance_time(self, minutes):
+        self.total_minutes += minutes
+
+    def get_current_time(self):
+        total_minutes = int(self.total_minutes)
+        current_day = total_minutes // (24 * 60) + 1
+        minutes_in_day = total_minutes % (24 * 60)
+        current_hour = minutes_in_day // 60
+        current_minute = minutes_in_day % 60
+        return current_day, current_hour, current_minute
+
+    def draw_time(self, surface):
+        current_day, current_hour, current_minute = self.get_current_time()
+        font = pygame.font.Font(None, 36)
+        time_text = f"Day {current_day}, {current_hour:02d}:{current_minute:02d}"
+        time_surf = font.render(time_text, True, (255, 255, 255))
+        # Position at top-left corner
+        surface.blit(time_surf, (10, 10))
+
 # Unified Character class
 class Character:
     def __init__(self, character_name, sprite_sheet_path, animations_config, idle_config, initial_pos, speed, direction="down", is_player=False):
@@ -89,6 +113,7 @@ class Character:
         self.energy = 100
         self.current_location_name = None
         self.target_location_name = None
+        self.previous_location_name = None  # Added to track previous location
 
     def load_animations(self, config):
         animations = {}
@@ -98,7 +123,9 @@ class Character:
         return animations
 
     def move_toward_target(self):
+        distance_moved = 0  # Initialize distance moved
         if self.target_pos:
+            old_pos = self.pos.copy()
             move_direction = self.target_pos - self.pos
             distance = move_direction.length()
             if distance > self.speed:
@@ -117,6 +144,13 @@ class Character:
             else:
                 self.pos = self.target_pos
                 self.target_pos = None
+
+                # Update previous location name
+                self.previous_location_name = self.current_location_name
+                self.current_location_name = self.target_location_name
+
+            # Calculate distance moved
+            distance_moved = (self.pos - old_pos).length()
         else:
             # Increment idle timer and ensure idle animation updates
             self.idle_timer += 1
@@ -128,6 +162,7 @@ class Character:
             else:
                 self.is_idle = False
                 self.frame_index = 0  # Reset frame index if not idle
+        return distance_moved
 
     def update_direction(self, move_direction):
         if abs(move_direction.x) > abs(move_direction.y):
@@ -181,6 +216,13 @@ class Character:
                 return True
         return False
 
+    def has_arrived_at_new_location(self):
+        # Check if the player has moved to a new location
+        if self.previous_location_name != self.current_location_name and self.current_location_name is not None:
+            return True
+        else:
+            return False
+
 # NPC Manager to handle multiple NPCs and player
 class CharacterManager:
     def __init__(self):
@@ -194,11 +236,15 @@ class CharacterManager:
         else:
             self.NPC[character_name] = character
 
-    def update_and_draw(self):
+    def update(self):
         for character_name in self.NPC:
             self.NPC[character_name].move_toward_target()
+        distance_moved = self.player.move_toward_target()
+        return distance_moved
+
+    def draw(self):
+        for character_name in self.NPC:
             self.NPC[character_name].draw(screen)
-        self.player.move_toward_target()
         self.player.draw(screen)
 
 # Animation configurations for player and NPC
@@ -230,6 +276,9 @@ character_manager.add_character("butcher", "Cute_Fantasy_Free/Player/player.png"
 character_manager.add_character("brewer", "Cute_Fantasy_Free/Player/player.png", npc_animations_config, npc_idle_config,
                                 initial_pos=allowed_positions[4]['pos'], speed=1)
 
+# Initialize the TimeManager
+time_manager = TimeManager()
+
 def draw_modal(text):
     # Calculate modal rectangle in the center of the screen
     rect = pygame.Rect(modal_coors[0][0], modal_coors[0][1], modal_coors[1][0], modal_coors[1][1])
@@ -255,22 +304,25 @@ def draw():
     for loc in allowed_positions:
         draw_x(loc['pos'])
 
-    # Update and draw all characters
-    character_manager.update_and_draw()
+    # Draw all characters
+    character_manager.draw()
 
     # Draw the modal if active
     if modal_active:
         draw_modal(modal_text)
 
+    # Draw current time
+    time_manager.draw_time(screen)
+
     # Update the display
     pygame.display.flip()
-
-
 
 # Main game loop
 running = True
 modal_active = False  # Initialize modal_active
 modal_text = ""       # Initialize modal_text
+in_game_movement_speed = 200  # Pixels per in-game minute
+
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -281,11 +333,23 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             character_manager.player.handle_input(pygame.Vector2(event.pos))
 
-    # Check for modal activation
-    if character_manager.player.check_for_allowed_position():
+    # Update character positions and get distance moved by player
+    distance_moved = character_manager.update()
+
+    if distance_moved > 0:
+        # Player is moving, advance time
+        time_increment_in_minutes = distance_moved / in_game_movement_speed
+        time_manager.advance_time(time_increment_in_minutes)
+    else:
+        # Player is idle; time does not advance
+        pass
+
+    # Check if player has arrived at a new location
+    if character_manager.player.has_arrived_at_new_location():
+        # Display modal
         modal_active = True
         modal_text = f"You have arrived at {character_manager.player.current_location_name}!"
-    else:
+    elif character_manager.player.target_pos is None:
         modal_active = False
         modal_text = ""
 
