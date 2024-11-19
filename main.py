@@ -70,8 +70,9 @@ class Graph:
         self.nodes[node_id] = position
         self.edges[node_id] = []
 
-    def add_edge(self, from_node, to_node, cost):
+    def add_bidirectional_edge(self, from_node, to_node, cost):
         self.edges[from_node].append((to_node, cost))
+        self.edges[to_node].append((from_node, cost))
 
 # Create the graph
 graph = Graph()
@@ -122,8 +123,7 @@ for from_loc_name, to_loc_name in connections:
     from_pos = graph.nodes[from_node]
     to_pos = graph.nodes[to_node]
     cost = distance(from_pos, to_pos)
-    graph.add_edge(from_node, to_node, cost)
-    graph.add_edge(to_node, from_node, cost)  # Assuming bidirectional paths
+    graph.add_bidirectional_edge(from_node, to_node, cost)
 
 # A* Pathfinding algorithm
 def heuristic(a, b):
@@ -132,10 +132,8 @@ def heuristic(a, b):
 def astar_search(start, goal):
     frontier = []
     heapq.heappush(frontier, (0, start))
-    came_from = {}
-    cost_so_far = {}
-    came_from[start] = None
-    cost_so_far[start] = 0
+    came_from = {start:None}
+    cost_so_far = {start: 0}
 
     while frontier:
         _, current = heapq.heappop(frontier)
@@ -219,7 +217,7 @@ class Character:
         self.is_player = is_player  # Flag to check if character is controlled by player
         self.hunger = 80
         self.energy = 100
-        self.current_location_name = None
+        self.current_location_name = "Farm"
         self.target_location_name = None
         self.previous_location_name = None
 
@@ -502,41 +500,40 @@ class Modal:
         self.background_image = None
         self.interactive_elements = []
         self.location_name = ""
-        self.farm_game = None  # Will hold the farming mini-game instance when at farm
+        self.curr_game = None  # Will hold the farming mini-game instance when at farm
 
-    def set_content(self, location_name, farm_game=None):
+    def set_content(self, location_name):
         self.location_name = location_name
+        self.curr_game = None
         # Load the background image and interactive components based on location
-        if location_name == "Farm":
-            # Load or create the background image for the farm modal
+        if self.location_name == "Farm":
             self.background_image = pygame.Surface(self.rect.size)
             self.background_image.fill((200, 255, 200))  # Light green background
-            # Use the pre-initialized farming mini-game
-            self.farm_game = farm_game
+            self.curr_game = farm_game
         else:
-            # For other locations, we can have different images or just a color
             self.background_image = pygame.Surface(self.rect.size)
             self.background_image.fill((200, 200, 200))
-            self.farm_game = None  # No farming game at other locations
+            self.curr_game = None  # No farming game at other locations
 
     def handle_event(self, event):
         if self.active:
-            if self.farm_game:
-                self.farm_game.handle_event(event)
-            # Handle other interactive elements
+            if self.curr_game == farm_game:
+                farm_game.handle_event(event)
 
     def update(self):
+        """
         if self.active:
-            if self.farm_game:
-                self.farm_game.update()
+            if self.curr_game == farm_game:
+                farm_game.update()
+        """
 
     def draw(self, surface):
         if self.active:
             # Draw the modal background
             surface.blit(self.background_image, self.rect.topleft)
             # Draw the interactive elements
-            if self.farm_game:
-                self.farm_game.draw(surface)
+            if self.location_name == "Farm":
+                farm_game.draw(surface)
             else:
                 # For other locations, display the location name
                 font = pygame.font.Font(None, 36)
@@ -600,6 +597,9 @@ while running:
     if modal.active:
         modal.update()
 
+    # Update mini-games
+    farm_game.update()
+
     # Update character positions and get distance moved by player
     distance_moved = character_manager.update()
 
@@ -612,11 +612,8 @@ while running:
     if character_manager.player.has_arrived_at_new_location():
         # Display modal
         modal.active = True
-        if character_manager.player.current_location_name == "Farm":
-            modal.set_content(character_manager.player.current_location_name, farm_game)
-        else:
-            modal.set_content(character_manager.player.current_location_name)
-    elif character_manager.player.current_location_name == None:
+        modal.set_content(character_manager.player.current_location_name)
+    elif character_manager.player.current_location_name is None:
         modal.active = False
 
     # Draw everything
